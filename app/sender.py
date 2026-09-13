@@ -273,20 +273,31 @@ async def _mark_latest_outgoing_message(page: Page) -> tuple[str, str]:
     return anchor, before_content
 
 
+STICKER_SEND_MAX_RETRIES = 3
+STICKER_SEND_RETRY_DELAY_MS = 2_000
+
+
 async def _click_and_confirm_sticker(page: Page, item, before: tuple[str, str], name: str) -> None:
     resource_key = await _sticker_resource_key(item)
     await item.click(force=True)
-    try:
-        await _confirm_sticker_sent(page, before, name, resource_key)
-    except PageOperationError as exc:
-        if "页面提示可以重试" in str(exc) and await _click_retry_on_latest_failed_message(page):
+    last_exc: PageOperationError | None = None
+    for attempt in range(STICKER_SEND_MAX_RETRIES):
+        try:
             await _confirm_sticker_sent(page, before, name, resource_key)
             return
-        if await _publish_ready(page):
-            await _trigger_send(page)
-            await _confirm_sticker_sent(page, before, name, resource_key)
-        else:
-            raise
+        except PageOperationError as exc:
+            last_exc = exc
+            if attempt >= STICKER_SEND_MAX_RETRIES - 1:
+                break
+            if "页面提示可以重试" in str(exc):
+                await page.wait_for_timeout(STICKER_SEND_RETRY_DELAY_MS)
+                if await _click_retry_on_latest_failed_message(page):
+                    continue
+            if await _publish_ready(page):
+                await _trigger_send(page)
+                continue
+            break
+    raise last_exc  # type: ignore[misc]
 
 
 async def _sticker_resource_key(item) -> str:
