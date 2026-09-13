@@ -1,12 +1,6 @@
 name: Send Douyin Messages
 
-on:
-  workflow_dispatch:
-    inputs:
-      dry_run = false
-        description: Only verify login and friends without sending
-        type: boolean
-        default: false
+
   # 使用 GitHub Actions 的日程时把下面三行注释删掉；用外部 cron 不用管
   schedule:
      - cron: "0 0 * * *"
